@@ -413,7 +413,7 @@ export default class HeadingPlugin extends Plugin {
 	}
 
 	onunload() {
-
+		this.clearHeadings();
 	}
 
 	async loadSettings() {
