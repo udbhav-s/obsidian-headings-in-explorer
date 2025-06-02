@@ -9,7 +9,7 @@ import {
 	View,
 	WorkspaceLeaf,
 } from "obsidian";
-import { FileTreeItem } from "obsidian-typings";
+import { FileTreeItem, FileExplorerView } from "obsidian-typings";
 
 interface HeadingPluginSettings {
 	showHeadings: boolean;
@@ -66,10 +66,6 @@ interface FileItemInfo {
 interface FileItem {
 	info: FileItemInfo;
 	innerEl: HTMLElement;
-}
-
-interface FileExplorerView extends View {
-	fileItems: Record<string, FileItem>;
 }
 
 export default class HeadingPlugin extends Plugin {
@@ -151,7 +147,7 @@ export default class HeadingPlugin extends Plugin {
 		this.app.workspace.onLayoutReady(async () => {
 			const items = await this.getFileExplorerFileItems();
 			const fileItem = items[Object.keys(items)[0]];
-			this.applyTitleUpdatePatch(fileItem as FileTreeItem);
+			await this.applyTitleUpdatePatch(fileItem as FileTreeItem);
 		});
 	}
 
@@ -189,11 +185,13 @@ export default class HeadingPlugin extends Plugin {
 	 * @param fileItem A file item used to get the FileTreeItem prototype
 	 * @returns
 	 */
-	applyTitleUpdatePatch(fileItem: FileTreeItem) {
+	async applyTitleUpdatePatch(fileItem: FileTreeItem) {
 		const proto = Object.getPrototypeOf(fileItem);
 
 		if (proto._obsidianHeadingPlugin_patched) return;
 
+		const leaf = await this.getFileExplorerLeaf();
+		const scroller = (leaf.view as FileExplorerView).tree.infinityScroll;
 		// eslint-disable-next-line @typescript-eslint/no-this-alias
 		const self = this;
 
@@ -205,6 +203,7 @@ export default class HeadingPlugin extends Plugin {
 				// );
 				Reflect.apply(target, ctx, args);
 				self.createHeadingsForFile(ctx.file);
+				scroller.invalidate(ctx, false);
 			},
 		};
 
@@ -358,14 +357,8 @@ export default class HeadingPlugin extends Plugin {
 	}
 
 	async clearExplorerHeight() {
-		// TODO: there must be a better way to do this and recalculate the heights
-		const fileExplorerLeafItems = await this.getFileExplorerFileItems();
-		for (const key in fileExplorerLeafItems) {
-			if (!fileExplorerLeafItems.hasOwnProperty(key)) continue;
-			const obj = fileExplorerLeafItems[key];
-			obj.info.height = 0;
-			obj.info.computed = false;
-		}
+		const leaf = await this.getFileExplorerLeaf();
+		(leaf.view as FileExplorerView).tree.infinityScroll.invalidateAll();
 	}
 
 	async getFileExplorerFileItems(): Promise<Record<string, FileItem>> {
@@ -387,6 +380,9 @@ export default class HeadingPlugin extends Plugin {
 				}
 
 				foundLeaf = leaf;
+
+				(window as any).leaf = leaf;
+
 				resolve(foundLeaf);
 			});
 
