@@ -22,7 +22,11 @@ Highlight Location is a convenience button in the file explorer navbar that mimi
 
 ![highlight location](img/highlight.png)
 
-If you have multiple tabs open at the same time, it will take you to the location of the last one you clicked your cursor on.
+If you have multiple tabs open at the same time, it will take you to the location of the last one you clicked your cursor on.  
+
+### Choose folders
+
+You can display headings for all notes (default) or select specific folders to load headings under notes. This is useful for getting an overview of files like Daily Notes and Zettelkasten notes which might not have descriptive names.  
 
 ## Installing
 
