@@ -1,4 +1,14 @@
-import { App, MarkdownView, Notice, Plugin, PluginSettingTab, Setting, TFile, View, WorkspaceLeaf } from 'obsidian';
+import {
+	App,
+	MarkdownView,
+	Notice,
+	Plugin,
+	PluginSettingTab,
+	Setting,
+	TFile,
+	View,
+	WorkspaceLeaf,
+} from "obsidian";
 
 interface HeadingPluginSettings {
 	showHeadings: boolean;
@@ -21,13 +31,15 @@ const DEFAULT_SETTINGS: HeadingPluginSettings = {
 	showHeading6: true,
 	regexArray: [
 		{
-			pattern: '^\\*\\*([^*]+)\\*\\*$',
-			level: 7
-		}
-	]
-}
+			pattern: "^\\*\\*([^*]+)\\*\\*$",
+			level: 7,
+		},
+	],
+};
 
-const USER_SETTINGS = structuredClone(DEFAULT_SETTINGS) as HeadingPluginSettings;
+const USER_SETTINGS = structuredClone(
+	DEFAULT_SETTINGS
+) as HeadingPluginSettings;
 
 interface RegexSetting {
 	pattern: string;
@@ -74,7 +86,8 @@ export default class HeadingPlugin extends Plugin {
 		const timedRetry = () => {
 			try {
 				// get first active leaf
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
+				const markdownView =
+					this.app.workspace.getActiveViewOfType(MarkdownView);
 				if (markdownView) {
 					this.lastActiveMarkdownLeaf = markdownView.leaf;
 				}
@@ -82,7 +95,9 @@ export default class HeadingPlugin extends Plugin {
 				this.init();
 			} catch (e) {
 				if (retries > 5) {
-					new Notice('Failed to initialize headings plugin.' + e.message);
+					new Notice(
+						"Failed to initialize headings plugin." + e.message
+					);
 					return;
 				}
 
@@ -98,41 +113,46 @@ export default class HeadingPlugin extends Plugin {
 				return;
 			}
 
-			if (file instanceof TFile && file.extension === 'md') {
+			if (file instanceof TFile && file.extension === "md") {
 				// wait for the metadata cache to update
 				setTimeout(async () => {
-					const headingsForFile = await this.createHeadingsForFile(file) as HeadingEntry[];
+					const headingsForFile = (await this.createHeadingsForFile(
+						file
+					)) as HeadingEntry[];
 					this.cachedHeadings[file.name] = headingsForFile;
 					this.clearExplorerHeight();
 				}, 500);
 			}
 		};
 
-		this.registerEvent(this.app.vault.on('modify', onFileModified));
-		this.registerEvent(this.app.vault.on('rename', onFileModified));
+		this.registerEvent(this.app.vault.on("modify", onFileModified));
+		this.registerEvent(this.app.vault.on("rename", onFileModified));
 
 		// track my last active markdown leaf
 		this.registerEvent(
-			this.app.workspace.on('active-leaf-change', (leaf) => {
-				if (leaf && leaf.view.getViewType() === 'markdown') {
+			this.app.workspace.on("active-leaf-change", (leaf) => {
+				if (leaf && leaf.view.getViewType() === "markdown") {
 					this.lastActiveMarkdownLeaf = leaf;
 				}
 			})
 		);
 
 		this.addCommand({
-			id: 'toggle-headings',
-			name: 'Toggle File Explorer Headings',
+			id: "toggle-headings",
+			name: "Toggle File Explorer Headings",
 			callback: async () => {
 				this.settings.showHeadings = !this.settings.showHeadings;
 				await this.saveSettings();
 				await this.recalculateHeadings();
-			}
+			},
 		});
 	}
 
 	// binary search sorted array to find closest line on or above target
-	findClosestLineOnOrAbove(headingArray: HeadingEntry[], target: number): HeadingEntry | null {
+	findClosestLineOnOrAbove(
+		headingArray: HeadingEntry[],
+		target: number
+	): HeadingEntry | null {
 		if (headingArray.length === 0) return null;
 
 		let start = 0;
@@ -166,7 +186,9 @@ export default class HeadingPlugin extends Plugin {
 
 		const files = this.app.vault.getMarkdownFiles();
 		for (const file of files) {
-			const headingsForFile = await this.createHeadingsForFile(file) as HeadingEntry[];
+			const headingsForFile = (await this.createHeadingsForFile(
+				file
+			)) as HeadingEntry[];
 			this.cachedHeadings[file.name] = headingsForFile;
 		}
 
@@ -177,11 +199,17 @@ export default class HeadingPlugin extends Plugin {
 	async setupLocateButton() {
 		const fileExplorer = await this.getFileExplorerLeaf();
 		const headerDom = fileExplorer.view.headerDom;
-		headerDom.navButtonsEl.querySelector('.highlight-file-button')?.remove();
+		headerDom.navButtonsEl
+			.querySelector(".highlight-file-button")
+			?.remove();
 
 		if (fileExplorer) {
-			const navButton = headerDom.addNavButton('crosshair', 'Highlight location', () => this.highlightFileWithHeading(fileExplorer));
-			navButton.addClass('highlight-file-button');
+			const navButton = headerDom.addNavButton(
+				"crosshair",
+				"Highlight location",
+				() => this.highlightFileWithHeading(fileExplorer)
+			);
+			navButton.addClass("highlight-file-button");
 		}
 	}
 
@@ -207,43 +235,48 @@ export default class HeadingPlugin extends Plugin {
 
 		const closestLine = this.findClosestLineOnOrAbove(activeHeadings, line);
 		if (closestLine) {
-			closestLine.uiElement?.addClass('highlighted-heading');
+			closestLine.uiElement?.addClass("highlighted-heading");
 
 			setTimeout(() => {
-				closestLine.uiElement?.removeClass('highlighted-heading');
+				closestLine.uiElement?.removeClass("highlighted-heading");
 			}, 2000);
 		}
 	}
 
 	async createHeadingsForFile(file: TFile) {
-		const fileCache = this.app.metadataCache.getFileCache(file)
+		const fileCache = this.app.metadataCache.getFileCache(file);
 		if (!fileCache) {
 			return;
 		}
 
 		const headings = fileCache.headings || [];
-		const mappedHeadings = headings.reduce<HeadingEntry[]>((acc, heading) => {
-			if ((heading.level === 1 && !this.settings.showHeading1) ||
-				(heading.level === 2 && !this.settings.showHeading2) ||
-				(heading.level === 3 && !this.settings.showHeading3) ||
-				(heading.level === 4 && !this.settings.showHeading4) ||
-				(heading.level === 5 && !this.settings.showHeading5) ||
-				(heading.level === 6 && !this.settings.showHeading6)) {
+		const mappedHeadings = headings.reduce<HeadingEntry[]>(
+			(acc, heading) => {
+				if (
+					(heading.level === 1 && !this.settings.showHeading1) ||
+					(heading.level === 2 && !this.settings.showHeading2) ||
+					(heading.level === 3 && !this.settings.showHeading3) ||
+					(heading.level === 4 && !this.settings.showHeading4) ||
+					(heading.level === 5 && !this.settings.showHeading5) ||
+					(heading.level === 6 && !this.settings.showHeading6)
+				) {
+					return acc;
+				}
+
+				const line = heading.position.start.line;
+				const headingText = heading.heading;
+				const level = heading.level;
+
+				acc.push({
+					text: headingText,
+					level: level,
+					line: line,
+				});
+
 				return acc;
-			}
-
-			const line = heading.position.start.line;
-			const headingText = heading.heading;
-			const level = heading.level;
-
-			acc.push({
-				text: headingText,
-				level: level,
-				line: line
-			});
-
-			return acc;
-		}, []);
+			},
+			[]
+		);
 
 		// short circuit, don't read files if no matching needed
 		if (this.settings.regexArray.length === 0) {
@@ -253,7 +286,7 @@ export default class HeadingPlugin extends Plugin {
 		}
 
 		const fileContent = await this.app.vault.read(file);
-		const fileLines = fileContent.split('\n');
+		const fileLines = fileContent.split("\n");
 
 		const matchedHeadings: HeadingEntry[] = [];
 		fileLines.forEach((line, index) => {
@@ -265,20 +298,22 @@ export default class HeadingPlugin extends Plugin {
 						matchedHeadings.push({
 							text: matches[0],
 							level: regexSetting.level,
-							line: index
+							line: index,
 						});
 					} else {
 						matchedHeadings.push({
 							text: matches[1],
 							level: regexSetting.level,
-							line: index
+							line: index,
 						});
 					}
 				}
 			});
 		});
 
-		const allHeadings = [...mappedHeadings, ...matchedHeadings].sort((a, b) => a.line - b.line);
+		const allHeadings = [...mappedHeadings, ...matchedHeadings].sort(
+			(a, b) => a.line - b.line
+		);
 		await this.createClickableHeadings(file, allHeadings);
 
 		return allHeadings;
@@ -296,7 +331,8 @@ export default class HeadingPlugin extends Plugin {
 	}
 
 	async getFileExplorerFileItems(): Promise<Record<string, FileItem>> {
-		return ((await this.getFileExplorerLeaf()).view as FileExplorerView).fileItems;
+		return ((await this.getFileExplorerLeaf()).view as FileExplorerView)
+			.fileItems;
 	}
 
 	async getFileExplorerLeaf(): Promise<WorkspaceLeaf> {
@@ -323,13 +359,13 @@ export default class HeadingPlugin extends Plugin {
 	}
 
 	getHeadingContainer(item: Element): Element {
-		const existingContainer = item.querySelector('.file-heading-container');
+		const existingContainer = item.querySelector(".file-heading-container");
 		if (existingContainer) {
 			return existingContainer;
 		}
 
-		const newContainer = document.createElement('div');
-		newContainer.classList.add('file-heading-container');
+		const newContainer = document.createElement("div");
+		newContainer.classList.add("file-heading-container");
 		item.appendChild(newContainer);
 		return newContainer;
 	}
@@ -360,43 +396,54 @@ export default class HeadingPlugin extends Plugin {
 		// clear existing headings
 		headingContainer.replaceChildren();
 
-		headings.forEach(heading => {
-			const headingItem = document.createElement('div');
+		headings.forEach((heading) => {
+			const headingItem = document.createElement("div");
 			headingItem.textContent = heading.text;
 
-			headingItem.classList.add('clickable-heading');
+			headingItem.classList.add("clickable-heading");
 
-			headingItem.on('click', '*', (e: MouseEvent) => {
+			headingItem.on("click", "*", (e: MouseEvent) => {
 				e.preventDefault();
-				this.app.workspace.openLinkText('', file.path, false, {
-					active: true,
-					eState: {
-						line: heading.line
-					}
-				}).then(() => {
-					setTimeout(() => {
-						this.unhighlightSelection(heading.line);
-					}, 500);
-				});
+				this.app.workspace
+					.openLinkText("", file.path, false, {
+						active: true,
+						eState: {
+							line: heading.line,
+						},
+					})
+					.then(() => {
+						setTimeout(() => {
+							this.unhighlightSelection(heading.line);
+						}, 500);
+					});
 			});
-			headingItem.on('auxclick', '*', (e: MouseEvent) => {
+			headingItem.on("auxclick", "*", (e: MouseEvent) => {
 				if (e.button !== 1) return;
 
 				e.preventDefault();
-				this.app.workspace.openLinkText('', file.path, true, {
-					active: true,
-					eState: {
-						line: heading.line
-					}
-				}).then(() => {
-					setTimeout(() => {
-						this.unhighlightSelection(heading.line);
-					}, 500);
-				});
+				this.app.workspace
+					.openLinkText("", file.path, true, {
+						active: true,
+						eState: {
+							line: heading.line,
+						},
+					})
+					.then(() => {
+						setTimeout(() => {
+							this.unhighlightSelection(heading.line);
+						}, 500);
+					});
 			});
 
-			const getMarginMultiplier = parseInt(getComputedStyle(document.body).getPropertyValue('--clickable-heading-margin-multiplier')) || 10;
-			headingItem.style.marginLeft = `${(heading.level - 1) * getMarginMultiplier}px`;
+			const getMarginMultiplier =
+				parseInt(
+					getComputedStyle(document.body).getPropertyValue(
+						"--clickable-heading-margin-multiplier"
+					)
+				) || 10;
+			headingItem.style.marginLeft = `${
+				(heading.level - 1) * getMarginMultiplier
+			}px`;
 			heading.uiElement = headingItem;
 
 			headingContainer.appendChild(headingItem);
@@ -404,7 +451,8 @@ export default class HeadingPlugin extends Plugin {
 	}
 
 	unhighlightSelection(line: number) {
-		const activeLeafView = this.lastActiveMarkdownLeaf?.view as MarkdownView;
+		const activeLeafView = this.lastActiveMarkdownLeaf
+			?.view as MarkdownView;
 		const position = { line: line, ch: 0 };
 		activeLeafView.editor.setCursor(position);
 		activeLeafView.editor.focus();
@@ -448,152 +496,185 @@ class HeadingSettingTab extends PluginSettingTab {
 		containerEl.empty();
 
 		new Setting(containerEl)
-			.setName('Show headings')
-			.setDesc('Show headings in the file explorer. Toggle off to restore normal headings.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showHeadings)
-				.onChange(async (value) => {
-					this.plugin.settings.showHeadings = value;
-					await this.plugin.saveSettings();
-					this.plugin.recalculateHeadings();
-				}));
+			.setName("Show headings")
+			.setDesc(
+				"Show headings in the file explorer. Toggle off to restore normal headings."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeadings)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeadings = value;
+						await this.plugin.saveSettings();
+						this.plugin.recalculateHeadings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Show heading 1')
-			.setDesc('Show heading 1 in the file explorer.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showHeading1)
-				.onChange(async (value) => {
-					this.plugin.settings.showHeading1 = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Show heading 1")
+			.setDesc("Show heading 1 in the file explorer.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeading1)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeading1 = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Show heading 2')
-			.setDesc('Show heading 2 in the file explorer.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showHeading2)
-				.onChange(async (value) => {
-					this.plugin.settings.showHeading2 = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Show heading 2")
+			.setDesc("Show heading 2 in the file explorer.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeading2)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeading2 = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Show heading 3')
-			.setDesc('Show heading 3 in the file explorer.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showHeading3)
-				.onChange(async (value) => {
-					this.plugin.settings.showHeading3 = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Show heading 3")
+			.setDesc("Show heading 3 in the file explorer.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeading3)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeading3 = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Show heading 4')
-			.setDesc('Show heading 4 in the file explorer.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showHeading4)
-				.onChange(async (value) => {
-					this.plugin.settings.showHeading4 = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Show heading 4")
+			.setDesc("Show heading 4 in the file explorer.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeading4)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeading4 = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Show heading 5')
-			.setDesc('Show heading 5 in the file explorer.')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showHeading5)
-				.onChange(async (value) => {
-					this.plugin.settings.showHeading5 = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Show heading 5")
+			.setDesc("Show heading 5 in the file explorer.")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeading5)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeading5 = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
 		new Setting(containerEl)
-			.setName('Show heading 6')
-			.setDesc('Show heading 6 in the file explorer')
-			.addToggle(toggle => toggle
-				.setValue(this.plugin.settings.showHeading6)
-				.onChange(async (value) => {
-					this.plugin.settings.showHeading6 = value;
-					await this.plugin.saveSettings();
-				}));
+			.setName("Show heading 6")
+			.setDesc("Show heading 6 in the file explorer")
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeading6)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeading6 = value;
+						await this.plugin.saveSettings();
+					})
+			);
 
-		new Setting(containerEl).setName('Custom heading patterns').setHeading();
-		const regexEl = containerEl.createDiv('regex-patterns');
+		new Setting(containerEl)
+			.setName("Custom heading patterns")
+			.setHeading();
+		const regexEl = containerEl.createDiv("regex-patterns");
 
-		new Setting(this.containerEl)
-			.addButton(button => {
-				button.setButtonText('Add regex pattern')
-					.onClick(() => {
-						this.addRegexPatternField(regexEl);
-					});
+		new Setting(this.containerEl).addButton((button) => {
+			button.setButtonText("Add regex pattern").onClick(() => {
+				this.addRegexPatternField(regexEl);
 			});
+		});
 
 		this.regexArray.forEach((pattern, index) => {
 			this.addRegexPatternField(regexEl, pattern, index);
 		});
 
-		new Setting(containerEl).setName('Troubleshoot').setHeading();
+		new Setting(containerEl).setName("Troubleshoot").setHeading();
 
 		new Setting(containerEl)
-			.setName('Recalculate headings')
-			.setDesc('Recalculates the headings for all files in the vault.')
-			.addButton(button => {
-				button.setButtonText('Recalculate headings')
+			.setName("Recalculate headings")
+			.setDesc("Recalculates the headings for all files in the vault.")
+			.addButton((button) => {
+				button
+					.setButtonText("Recalculate headings")
 					.setWarning()
 					.onClick(async () => {
 						this.plugin.recalculateHeadings();
-						new Notice('Headings recalculated.');
+						new Notice("Headings recalculated.");
 					});
 			});
 
 		new Setting(containerEl)
-			.setName('Reset to default')
-			.setDesc('Reset all settings to default values.')
-			.addButton(button => {
-				button.setButtonText('Reset to default')
+			.setName("Reset to default")
+			.setDesc("Reset all settings to default values.")
+			.addButton((button) => {
+				button
+					.setButtonText("Reset to default")
 					.setWarning()
 					.onClick(async () => {
-						this.plugin.settings = structuredClone(DEFAULT_SETTINGS) as HeadingPluginSettings;
+						this.plugin.settings = structuredClone(
+							DEFAULT_SETTINGS
+						) as HeadingPluginSettings;
 						this.regexArray = this.plugin.settings.regexArray;
 						await this.plugin.saveSettings();
 						this.display();
 
 						this.plugin.recalculateHeadings();
-						new Notice('Settings reset to default.');
+						new Notice("Settings reset to default.");
 					});
 			});
 	}
 
-	addRegexPatternField(regexEl: HTMLElement, regexSetting = { pattern: '', level: 1 }, index = this.regexArray.length) {
+	addRegexPatternField(
+		regexEl: HTMLElement,
+		regexSetting = { pattern: "", level: 1 },
+		index = this.regexArray.length
+	) {
 		const setting = new Setting(regexEl)
 			.setName(`Custom pattern`)
 			.setDesc(`Enter a regex pattern and specify its level.`);
 
-		setting.addText(text => text
-			.setValue(regexSetting.pattern)
-			.setPlaceholder('Enter regex pattern...')
-			.onChange(async (value) => {
-				this.regexArray[index] = { ...this.regexArray[index], pattern: value };
-				await this.plugin.saveSettings();
-			}));
-
-		setting.addSlider(slider => slider
-			.setLimits(1, 7, 1)
-			.setValue(regexSetting.level)
-			.setDynamicTooltip()
-			.onChange(async (value) => {
-				this.regexArray[index] = { ...this.regexArray[index], level: value };
-				await this.plugin.saveSettings();
-			}));
-
-		setting.addButton(button => {
-			button.setButtonText('Delete')
-				.onClick(async () => {
-					this.regexArray.splice(index, 1);
+		setting.addText((text) =>
+			text
+				.setValue(regexSetting.pattern)
+				.setPlaceholder("Enter regex pattern...")
+				.onChange(async (value) => {
+					this.regexArray[index] = {
+						...this.regexArray[index],
+						pattern: value,
+					};
 					await this.plugin.saveSettings();
-					this.display();
-				});
+				})
+		);
+
+		setting.addSlider((slider) =>
+			slider
+				.setLimits(1, 7, 1)
+				.setValue(regexSetting.level)
+				.setDynamicTooltip()
+				.onChange(async (value) => {
+					this.regexArray[index] = {
+						...this.regexArray[index],
+						level: value,
+					};
+					await this.plugin.saveSettings();
+				})
+		);
+
+		setting.addButton((button) => {
+			button.setButtonText("Delete").onClick(async () => {
+				this.regexArray.splice(index, 1);
+				await this.plugin.saveSettings();
+				this.display();
+			});
 		});
 	}
 }
