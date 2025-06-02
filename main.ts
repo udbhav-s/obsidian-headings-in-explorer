@@ -6,11 +6,15 @@ import {
 	PluginSettingTab,
 	Setting,
 	TFile,
+	TFolder,
 	WorkspaceLeaf,
 } from "obsidian";
 import { FileTreeItem, FileExplorerView } from "obsidian-typings";
 
 interface HeadingPluginSettings {
+	showHeadingsForAllFolders: boolean;
+	showHeadingFolders: string[];
+
 	showHeadings: boolean;
 	showHeading1: boolean;
 	showHeading2: boolean;
@@ -22,6 +26,8 @@ interface HeadingPluginSettings {
 }
 
 const DEFAULT_SETTINGS: HeadingPluginSettings = {
+	showHeadingsForAllFolders: true,
+	showHeadingFolders: [],
 	showHeadings: true,
 	showHeading1: true,
 	showHeading2: true,
@@ -137,6 +143,8 @@ export default class HeadingPlugin extends Plugin {
 			const items = await this.getFileExplorerFileItems();
 			const fileItem = items[Object.keys(items)[0]];
 			await this.applyTitleUpdatePatch(fileItem as FileTreeItem);
+
+			this.registerFolderHeadingContextMenu();
 		});
 	}
 
@@ -191,8 +199,18 @@ export default class HeadingPlugin extends Plugin {
 				// 	"Patched updateTitle invoked for file: " + ctx.file.path
 				// );
 				Reflect.apply(target, ctx, args);
-				self.createHeadingsForFile(ctx.file);
-				scroller.invalidate(ctx, false);
+
+				// Add headings
+				if (
+					self.settings.showHeadingsForAllFolders ||
+					(ctx.file.parent &&
+						self.settings.showHeadingFolders.contains(
+							ctx.file.parent.path
+						))
+				) {
+					self.createHeadingsForFile(ctx.file);
+					scroller.invalidate(ctx, false);
+				}
 			},
 		};
 
@@ -212,10 +230,16 @@ export default class HeadingPlugin extends Plugin {
 
 		const files = this.app.vault.getMarkdownFiles();
 		for (const file of files) {
-			const headingsForFile = (await this.createHeadingsForFile(
-				file
-			)) as HeadingEntry[];
-			this.cachedHeadings[file.name] = headingsForFile;
+			if (
+				this.settings.showHeadingsForAllFolders ||
+				(file.parent &&
+					this.settings.showHeadingFolders.contains(file.parent.path))
+			) {
+				const headingsForFile = (await this.createHeadingsForFile(
+					file
+				)) as HeadingEntry[];
+				this.cachedHeadings[file.name] = headingsForFile;
+			}
 		}
 
 		// zeroes out the heights of the file explorer items, or scrolling will break
@@ -406,6 +430,22 @@ export default class HeadingPlugin extends Plugin {
 		}
 	}
 
+	async clearHeadingsForFolder(folder: TFolder) {
+		const fileExplorerLeafItems = await this.getFileExplorerFileItems();
+
+		for (const file of folder.children) {
+			if ("children" in file) continue;
+
+			const key = file.path;
+			if (!fileExplorerLeafItems.hasOwnProperty(key)) continue;
+			const obj = fileExplorerLeafItems[key];
+			const item = obj.innerEl;
+			const headingContainer = this.getHeadingContainer(item);
+			// clear existing headings
+			headingContainer.replaceChildren();
+		}
+	}
+
 	async createClickableHeadings(file: TFile, headings: HeadingEntry[]) {
 		if (headings.length === 0) {
 			return;
@@ -483,6 +523,46 @@ export default class HeadingPlugin extends Plugin {
 		activeLeafView.editor.removeHighlights();
 	}
 
+	registerFolderHeadingContextMenu() {
+		this.registerEvent(
+			this.app.workspace.on("file-menu", (menu, abstractFile) => {
+				if (abstractFile instanceof TFolder) {
+					const showNoteHeadings =
+						this.settings.showHeadingFolders.includes(
+							abstractFile.path
+						);
+
+					menu.addItem((item) =>
+						item
+							.setTitle(
+								showNoteHeadings
+									? "Hide headings for notes"
+									: "Show headings for notes"
+							)
+							.setIcon("heading")
+							.onClick(() => {
+								if (showNoteHeadings) {
+									this.settings.showHeadingFolders =
+										this.settings.showHeadingFolders.filter(
+											(p) => p != abstractFile.path
+										);
+
+									this.clearHeadingsForFolder(abstractFile);
+										
+								} else {
+									this.settings.showHeadingFolders.push(
+										abstractFile.path
+									);
+								}
+
+								this.saveSettings();
+							})
+					);
+				}
+			})
+		);
+	}
+
 	onunload() {
 		this.clearHeadings();
 	}
@@ -528,6 +608,21 @@ class HeadingSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.showHeadings)
 					.onChange(async (value) => {
 						this.plugin.settings.showHeadings = value;
+						await this.plugin.saveSettings();
+						this.plugin.recalculateHeadings();
+					})
+			);
+
+		new Setting(containerEl)
+			.setName("Show Headings For All Folders")
+			.setDesc(
+				"Show headings for notes in all folders. If disabled, you can enable headings for specific folders by right-clicking the folder and selecting the option from the context menu."
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.showHeadingsForAllFolders)
+					.onChange(async (value) => {
+						this.plugin.settings.showHeadingsForAllFolders = value;
 						await this.plugin.saveSettings();
 						this.plugin.recalculateHeadings();
 					})
