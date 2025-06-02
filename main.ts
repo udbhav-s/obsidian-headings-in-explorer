@@ -548,7 +548,6 @@ export default class HeadingPlugin extends Plugin {
 										);
 
 									this.clearHeadingsForFolder(abstractFile);
-										
 								} else {
 									this.settings.showHeadingFolders.push(
 										abstractFile.path
@@ -625,8 +624,40 @@ class HeadingSettingTab extends PluginSettingTab {
 						this.plugin.settings.showHeadingsForAllFolders = value;
 						await this.plugin.saveSettings();
 						this.plugin.recalculateHeadings();
+						this.display(); // Refresh to show/hide folder management section
 					})
 			);
+
+		// Add folder management section when showHeadingsForAllFolders is disabled
+		if (!this.plugin.settings.showHeadingsForAllFolders) {
+			new Setting(containerEl)
+				.setName("Folder-specific headings")
+				.setHeading();
+
+			// Add description
+			const descEl = containerEl.createEl("div", {
+				cls: "setting-item-description",
+				text: "Manage which folders show headings. You can also add or remove folders by right-clicking them in the file browser.",
+			});
+			descEl.style.marginBottom = "1em";
+			descEl.style.fontStyle = "italic";
+
+			const foldersEl = containerEl.createDiv("enabled-folders");
+
+			// Display existing folders
+			this.plugin.settings.showHeadingFolders.forEach(
+				(folderPath, index) => {
+					this.addFolderRow(foldersEl, folderPath, index);
+				}
+			);
+
+			// Add new folder input row
+			this.addNewFolderRow(foldersEl);
+		}
+
+		new Setting(containerEl)
+			.setName("Control which headings are displayed")
+			.setHeading();
 
 		new Setting(containerEl)
 			.setName("Show heading 1")
@@ -749,6 +780,78 @@ class HeadingSettingTab extends PluginSettingTab {
 						new Notice("Settings reset to default.");
 					});
 			});
+	}
+
+	addFolderRow(foldersEl: HTMLElement, folderPath: string, index: number) {
+		const setting = new Setting(foldersEl)
+			.setName(folderPath || "Empty path")
+			.setDesc(`Folder path: ${folderPath}`);
+
+		setting.addButton((button) => {
+			button
+				.setButtonText("Remove")
+				.setTooltip("Remove this folder from the list")
+				.onClick(async () => {
+					// Find the folder object to clear its headings
+					const folder =
+						this.app.vault.getAbstractFileByPath(folderPath);
+					if (folder instanceof TFolder) {
+						await this.plugin.clearHeadingsForFolder(folder);
+					}
+
+					this.plugin.settings.showHeadingFolders.splice(index, 1);
+					await this.plugin.saveSettings();
+					this.display(); // Refresh the settings display
+				});
+		});
+	}
+
+	addNewFolderRow(foldersEl: HTMLElement) {
+		let newFolderPath = "";
+
+		const setting = new Setting(foldersEl)
+			.setName("Add new folder")
+			.setDesc(
+				"Enter the folder path to enable headings for that folder"
+			);
+
+		setting.addText((text) =>
+			text
+				.setPlaceholder(
+					"Enter folder path (e.g., 'My Folder' or 'Parent/Child')"
+				)
+				.onChange((value) => {
+					newFolderPath = value;
+				})
+		);
+
+		setting.addButton((button) => {
+			button
+				.setButtonText("Add")
+				.setTooltip("Add this folder to the list")
+				.onClick(async () => {
+					if (
+						newFolderPath.trim() &&
+						!this.plugin.settings.showHeadingFolders.includes(
+							newFolderPath.trim()
+						)
+					) {
+						this.plugin.settings.showHeadingFolders.push(
+							newFolderPath.trim()
+						);
+						await this.plugin.saveSettings();
+						this.display(); // Refresh the settings display
+					} else if (
+						this.plugin.settings.showHeadingFolders.includes(
+							newFolderPath.trim()
+						)
+					) {
+						new Notice("This folder is already in the list.");
+					} else {
+						new Notice("Please enter a valid folder path.");
+					}
+				});
+		});
 	}
 
 	addRegexPatternField(
