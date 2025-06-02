@@ -6,7 +6,6 @@ import {
 	PluginSettingTab,
 	Setting,
 	TFile,
-	View,
 	WorkspaceLeaf,
 } from "obsidian";
 import { FileTreeItem, FileExplorerView } from "obsidian-typings";
@@ -56,16 +55,6 @@ interface HeadingEntry {
 
 interface HeadingEntryCache {
 	[key: string]: HeadingEntry[];
-}
-
-interface FileItemInfo {
-	height: number;
-	computed: boolean;
-}
-
-interface FileItem {
-	info: FileItemInfo;
-	innerEl: HTMLElement;
 }
 
 export default class HeadingPlugin extends Plugin {
@@ -361,7 +350,7 @@ export default class HeadingPlugin extends Plugin {
 		(leaf.view as FileExplorerView).tree.infinityScroll.invalidateAll();
 	}
 
-	async getFileExplorerFileItems(): Promise<Record<string, FileItem>> {
+	async getFileExplorerFileItems(): Promise<FileExplorerView["fileItems"]> {
 		return ((await this.getFileExplorerLeaf()).view as FileExplorerView)
 			.fileItems;
 	}
