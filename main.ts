@@ -9,6 +9,7 @@ import {
 	View,
 	WorkspaceLeaf,
 } from "obsidian";
+import { FileTreeItem } from "obsidian-typings";
 
 interface HeadingPluginSettings {
 	showHeadings: boolean;
@@ -146,6 +147,12 @@ export default class HeadingPlugin extends Plugin {
 				await this.recalculateHeadings();
 			},
 		});
+
+		this.app.workspace.onLayoutReady(async () => {
+			const items = await this.getFileExplorerFileItems();
+			const fileItem = items[Object.keys(items)[0]];
+			this.applyTitleUpdatePatch(fileItem as FileTreeItem);
+		});
 	}
 
 	// binary search sorted array to find closest line on or above target
@@ -174,6 +181,37 @@ export default class HeadingPlugin extends Plugin {
 		}
 
 		return bestMatch;
+	}
+
+	/**
+	 * Patch FileTreeItem's updateTitle to add headings whenever a new file item is rendered
+	 *
+	 * @param fileItem A file item used to get the FileTreeItem prototype
+	 * @returns
+	 */
+	applyTitleUpdatePatch(fileItem: FileTreeItem) {
+		const proto = Object.getPrototypeOf(fileItem);
+
+		if (proto._obsidianHeadingPlugin_patched) return;
+
+		// eslint-disable-next-line @typescript-eslint/no-this-alias
+		const self = this;
+
+		const patched = {
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			apply(target: any, ctx: FileTreeItem, args: any) {
+				// console.log(
+				// 	"Patched updateTitle invoked for file: " + ctx.file.path
+				// );
+				Reflect.apply(target, ctx, args);
+				self.createHeadingsForFile(ctx.file);
+			},
+		};
+
+		const proxyFn = new Proxy(proto.updateTitle, patched);
+		proto.updateTitle = proxyFn;
+
+		proto._obsidianHeadingPlugin_patched = true;
 	}
 
 	async init() {
