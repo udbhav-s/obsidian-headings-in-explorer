@@ -398,7 +398,7 @@ export default class HeadingPlugin extends Plugin {
 
 				foundLeaf = leaf;
 
-				(window as any).leaf = leaf;
+				// (window as any).leaf = leaf;
 
 				resolve(foundLeaf);
 			});
@@ -530,6 +530,8 @@ export default class HeadingPlugin extends Plugin {
 	registerFolderHeadingContextMenu() {
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, abstractFile) => {
+				if (this.settings.showHeadingsForAllFolders) return;
+
 				if (abstractFile instanceof TFolder) {
 					const showNoteHeadings =
 						this.settings.showHeadingFolders.includes(
