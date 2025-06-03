@@ -105,6 +105,10 @@ export default class HeadingPlugin extends Plugin {
 				return;
 			}
 
+			if (!file.parent || !this.settings.showHeadingFolders.contains(file.parent.path)) {
+				return;
+			}
+
 			if (file instanceof TFile && file.extension === "md") {
 				// wait for the metadata cache to update
 				setTimeout(async () => {
