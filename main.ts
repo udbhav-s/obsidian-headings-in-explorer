@@ -112,11 +112,16 @@ export default class HeadingPlugin extends Plugin {
 			if (file instanceof TFile && file.extension === "md") {
 				// wait for the metadata cache to update
 				setTimeout(async () => {
+					// TODO: Don't update DOM if headings haven't changed
+					// (extract createClickableHeadings out of createHeadingsForFile)
 					const headingsForFile = (await this.createHeadingsForFile(
 						file
 					)) as HeadingEntry[];
-					this.cachedHeadings[file.path] = headingsForFile;
-					this.clearExplorerHeight();
+					if (!this.headingEntriesEqual(this.cachedHeadings[file.path], headingsForFile)) {
+						// Recalculate explorer height if headings have changed.
+						this.cachedHeadings[file.path] = headingsForFile;
+						this.clearExplorerHeight();
+					}
 				}, 500);
 			}
 		};
@@ -585,6 +590,20 @@ export default class HeadingPlugin extends Plugin {
 		this.cachedHeadings = {};
 		await this.clearHeadings();
 		await this.init();
+	}
+
+	headingEntriesEqual(a: HeadingEntry[], b: HeadingEntry[]) {
+		if (a.length != b.length) return false;
+
+		let eq = true;
+		for (let i = 0; i < a.length; i++) {
+			for (const key of (["text", "level", "line"] as (keyof HeadingEntry)[])) {
+				if (a[i][key] != b[i][key]) {
+					eq = false;
+				}
+			}
+		}
+		return eq;
 	}
 }
 
