@@ -115,7 +115,7 @@ export default class HeadingPlugin extends Plugin {
 					const headingsForFile = (await this.createHeadingsForFile(
 						file
 					)) as HeadingEntry[];
-					this.cachedHeadings[file.name] = headingsForFile;
+					this.cachedHeadings[file.path] = headingsForFile;
 					this.clearExplorerHeight();
 				}, 500);
 			}
@@ -242,7 +242,7 @@ export default class HeadingPlugin extends Plugin {
 				const headingsForFile = (await this.createHeadingsForFile(
 					file
 				)) as HeadingEntry[];
-				this.cachedHeadings[file.name] = headingsForFile;
+				this.cachedHeadings[file.path] = headingsForFile;
 			}
 		}
 
@@ -280,7 +280,7 @@ export default class HeadingPlugin extends Plugin {
 		if (!activeFile) {
 			return;
 		}
-		const activeHeadings = this.cachedHeadings[activeFile.name];
+		const activeHeadings = this.cachedHeadings[activeFile.path];
 
 		fileExplorer.view.revealInFolder(activeFile);
 
